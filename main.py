@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     # Startup: DB 초기화
     if os.environ["DATABASE_INIT"] == "0":
         logger.info("DATABASE Table initialization start")
+        SQLModel.metadata.drop_all(engine)
         create_db_and_tables(engine)
         logger.info("ATABASE Table initialization end")
     yield
