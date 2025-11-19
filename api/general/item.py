@@ -14,6 +14,7 @@ router = APIRouter()
 # Routes
 @router.post("/add", response_model=ItemResponse, status_code=status.HTTP_201_CREATED)
 def add_item(item: ItemCreate, session: SessionDep):
+    logger.debug(item)
     statement = select(Item).where(Item.name == item.name)
     _item = session.exec(statement).first()
     if _item:
