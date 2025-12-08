@@ -41,3 +41,17 @@ def evaluate(evalution_type:EvalutionType, score:int) -> float:
         if score <= _time:
             return _score
     return 0.0
+
+def grade(total_score:float) -> GradeType:
+    if total_score >= 95:
+        return GradeType.S
+    if total_score >= 85:
+        return GradeType.A
+    if total_score >= 75:
+        return GradeType.B
+    if total_score >= 60:
+        return GradeType.C
+    if total_score >= 40:
+        return GradeType.D
+    return GradeType.F
+    
