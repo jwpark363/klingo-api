@@ -24,9 +24,11 @@ from db.model.interview import (
     InterviewCreate, InterviewResponse, UserInterviewCreate, UserInterviewResponse
 )
 
+from db.redis import StateStore
+
 from api.listening.listening_service import ListeningService
 from api.speaking.dto.speaking_dto import SpeakingResponse
-## logger
+
 from loguru import logger
 
 DATABASE_URL="postgresql://klingo:klingo@100.100.53.32:5432/k-lingo"
@@ -72,8 +74,8 @@ class SpeakingService:
                 raise HTTPException(status_code=503, detail="AI 서비스 초기화 실패")
 
         return cls._asr_pipeline
-
-    def listen_speaking_and_judge(self, question, audio_file: UploadFile) -> SpeakingResponse:
+    
+    async def listen_speaking_and_judge(self, username, question, audio_file: UploadFile) -> SpeakingResponse:
         
         file_name = 'speaking_' + str(uuid.uuid4()) + '.wav'
         file_path = os.path.join(INPUT_DIR, file_name)
@@ -108,8 +110,36 @@ class SpeakingService:
                 final_feedback=final_feedback
             )
             
-            return response_object
+            # redis에 result값 업데이트(저장값이 문자열이라 조회 -> 수정 -> 재저장으로 진행)
+            redis = StateStore()
+        
+            ## 1. 조회
+            stored_str = await redis.load_user_state("KLINGO-CURRENT", username)
+            current_data = json.loads(stored_str)
+        
+            # 현재 평가 결과 객체 생성
+            new_score_entry = {
+                "score": final_overall_score,
+                "desc": final_feedback
+            }
+        
+            # 'result' 키가 없거나 딕셔너리가 아니면 초기화 (기존 데이터 호환성 유지)
+            if "result" not in current_data or not isinstance(current_data["result"], dict):
+                current_data["result"] = {}
+                
+            # 'result' 딕셔너리 안에 'scores' 키가 없거나 리스트가 아니면 초기화
+            if "scores" not in current_data["result"] or not isinstance(current_data["result"]["scores"], list):
+                current_data["result"]["scores"] = []
             
+            # 새로운 점수 객체를 'result' -> 'scores' 리스트에 추가
+            current_data["result"]["scores"].append(new_score_entry)
+        
+            state_data_json = json.dumps(current_data, ensure_ascii=False)
+
+            await redis.save_user_state("KLINGO-CURRENT", username, state_data_json)
+        
+            return response_object
+        
         except sf.LibsndfileError as e:
             logger.error(f"오디오 파일 읽기 실패: {e}")
             raise HTTPException(400, "유효하지 않은 WAV 파일입니다")
